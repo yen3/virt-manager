@@ -23,9 +23,15 @@ import datetime
 import logging
 import re
 
-import gi
-gi.require_version('Libosinfo', '1.0')
-from gi.repository import Libosinfo as libosinfo
+_WITHOUT_LIBOSINFO = False
+
+try:
+    import gi
+    gi.require_version('Libosinfo', '1.0')
+    from gi.repository import Libosinfo as libosinfo
+except ImportError:
+    _WITHOUT_LIBOSINFO = True
+
 
 
 ###################
@@ -198,6 +204,12 @@ class _OSDB(object):
 
     @property
     def _os_loader(self):
+        if _WITHOUT_LIBOSINFO:
+            if self.__os_loader is not None:
+                self.__os_loader = None
+
+            return self.__os_loader
+
         if not self.__os_loader:
             loader = libosinfo.Loader()
             loader.process_default_path()
@@ -210,13 +222,16 @@ class _OSDB(object):
         if not self.__all_variants:
             loader = self._os_loader
             allvariants = self._make_default_variants()
-            db = loader.get_db()
-            oslist = db.get_os_list()
-            for os in range(oslist.get_length()):
-                osi = _OsVariant(oslist.get_nth(os))
-                allvariants[osi.name] = osi
+
+            if not _WITHOUT_LIBOSINFO:
+                db = loader.get_db()
+                oslist = db.get_os_list()
+                for os in range(oslist.get_length()):
+                    osi = _OsVariant(oslist.get_nth(os))
+                    allvariants[osi.name] = osi
 
             self.__all_variants = allvariants
+
         return self.__all_variants
 
 
@@ -229,6 +244,9 @@ class _OSDB(object):
         return self._all_variants.get(key)
 
     def lookup_os_by_media(self, location):
+        if _WITHOUT_LIBOSINFO:
+            return None
+
         media = libosinfo.Media.create_from_location(location, None)
         ret = self._os_loader.get_db().guess_os_from_media(media)
         if not (ret and len(ret) > 0 and ret[0]):
